@@ -1,0 +1,54 @@
+version: '3.8'
+services:
+  api_chat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api_chat
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    networks:
+      - network_chat
+
+  server_nginx:
+    image: nginx:latest
+    container_name: server_nginx
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/snippets:/etc/nginx/snippets
+    depends_on:
+      - api_chat
+    networks:
+      - network_chat
+
+  db_mysql:
+    image: mysql:8.0
+    container_name: db_mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: chat_app
+      MYSQL_USER: chat_app
+      MYSQL_PASSWORD: root
+    networks:
+      - network_chat
+
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db_mysql
+    networks:
+      - network_chat
+
+networks:
+  network_chat:
+    driver: bridge
