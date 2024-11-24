@@ -18,16 +18,3 @@ use App\Models\User;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
-
-Route::get('user/init', function (Request $request) {
-    $user = new User;
-    $user->password = Hash::make('@dminUser123');
-    $user->email = 'eric.bermejo.reyes@gmail.com';
-    $user->name = 'Eric Reyes';
-    $user->save();
-
-    return response()->json([
-        'status' => 'ok',
-        'user' => $user,
-    ], 200);
-});
