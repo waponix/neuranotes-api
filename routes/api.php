@@ -1,8 +1,6 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Models\User;
 use App\Http\Controllers\AuthController;
 
 /*
@@ -17,10 +15,23 @@ use App\Http\Controllers\AuthController;
 */
 
 Route::prefix('auth')->group(function () {
+    
     Route::controller(AuthController::class)->group(function () {
+        
         Route::post('/login', 'login');
         Route::post('/register', 'register');
-        Route::middleware('auth:api')->get('/refresh', 'refresh');
-        Route::middleware('auth:api')->get('/profile', 'profile');
+
+        Route::middleware('auth:api')->group(function () {
+            Route::get('/refresh', 'refresh');
+            Route::get('/profile', 'profile');
+        });
+
     });
+    
+});
+
+Route::fallback(function () {
+    return response()->json([
+        'error' => 'resource not found'
+    ], 404);
 });

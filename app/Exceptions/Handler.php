@@ -2,6 +2,7 @@
 
 namespace App\Exceptions;
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
@@ -26,5 +27,17 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+    }
+
+    public function render($request, Throwable $e)
+    {
+        if ($request->is('api/*')) {
+            return match(true) {
+                $e instanceof AuthenticationException => response()->json(['error' => 'invalid token'], 401),
+                true => response()->json(['error' => 'system error'], 500),
+            };
+        }
+
+        return $this->render($request, $e);
     }
 }
