@@ -1,56 +1,43 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Resource\AuthResource;
+use App\Http\Resource\Validator\Auth\RegisterValidator;
+use App\Http\Resource\Validator\Auth\LoginValidator;
 use Illuminate\Http\Request;
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    public function register(
+        Request $request,
+        AuthResource $authResource,
+    )
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6',
-            'password_confirmation' => 'required|string|min:6|same:password',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
-        }
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
-
-        $token = JWTAuth::fromUser($user);
-
-        return response()->json(['token' => $token], 201);
+        return $authResource
+            ->useValidator(RegisterValidator::class)
+            ->handleRegisterRequest($request);
     }
 
-    public function login(Request $request)
+    public function login(
+        Request $request, 
+        AuthResource $authResource,
+    )
     {
-        $credentials = $request->only('email', 'password');
-
-        if (!$token = JWTAuth::attempt($credentials)) {
-            return response()->json(['error' => 'Invalid credentials'], 401);
-        }
-
-        return response()->json(['token' => $token]);
+        return $authResource
+            ->useValidator(LoginValidator::class)
+            ->handleLoginRequest($request);
     }
 
-    public function refresh(Request $request)
+    public function refresh(
+        Request $request,
+        AuthResource $authResource,
+    )
     {
-        return response()->json(auth()->refresh());
+        return $authResource->handleRefreshRequest($request);
     }
 
-    public function profile()
+    public function profile(Request $request, AuthResource $authResource)
     {
-        return response()->json(auth()->user());
+        return $authResource->handleProfileRequest($request);
     }
 }

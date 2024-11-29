@@ -20,9 +20,9 @@ Route::prefix('auth')->group(function () {
         
         Route::post('/login', 'login');
         Route::post('/register', 'register');
+        Route::get('/refresh', 'refresh');
 
         Route::middleware('auth:api')->group(function () {
-            Route::get('/refresh', 'refresh');
             Route::get('/profile', 'profile');
         });
 
