@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Api;
 
+use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\Resource;
 use App\Http\Api\Interface\ResourceValidator;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -11,9 +12,11 @@ abstract class BasicResource implements Resource
 
     private array $validators;
     private string $validatorId = '';
-    private JsonResponse $jsonResponse;
 
-    public function __construct(ResourceValidator ...$resourceValidators)
+    public function __construct(
+        private readonly OutputBuilder $outputBuilder, 
+        ResourceValidator ...$resourceValidators,
+    )
     {
         foreach ($resourceValidators as $resourceValidator) {
             $this->validators[$resourceValidator::class] = $resourceValidator;
@@ -27,14 +30,19 @@ abstract class BasicResource implements Resource
                 list($request) = $args;
                 $validator = $this->validator();
 
-                $handlerArgs = [$request];
+                $handlerArgs = [
+                    $request, 
+                    $this->outputBuilder,
+                ];
+
                 if ($validator instanceof ResourceValidator) {
                     $handlerArgs[] = $validator;
                 }
 
                 return $this
                     ->{$name}(...$handlerArgs)
-                    ->output($this->jsonResponse);
+                    ->outputBuilder
+                    ->build();
         }
 
        return $this->{$name}(...$args);
@@ -44,17 +52,6 @@ abstract class BasicResource implements Resource
     {
         $this->validatorId = $validatorClassName;
         return $this;
-    }
-
-    protected function setResponse(array|object $data, int $statusCode = 200): static
-    {
-        $this->jsonResponse = response()->json($data, $statusCode);
-        return $this;
-    }
-
-    public function output(JsonResponse $jsonResponse): JsonResponse
-    {    
-        return $jsonResponse;
     }
 
     protected function validator(): ?ResourceValidator

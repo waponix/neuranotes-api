@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Api\BasicOutputBuilder;
 use App\Http\Resource\AuthResource;
 use App\Http\Resource\Validator\Auth\RegisterValidator;
 use App\Http\Resource\Validator\Auth\LoginValidator;
@@ -16,6 +17,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(AuthResource::class, function () {
             return new AuthResource(
+                $this->app->get(BasicOutputBuilder::class),
                 $this->app->get(LoginValidator::class),
                 $this->app->get(RegisterValidator::class),
             );

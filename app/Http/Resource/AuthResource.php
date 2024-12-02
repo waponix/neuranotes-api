@@ -2,6 +2,7 @@
 namespace App\Http\Resource;
 
 use App\Http\Api\BasicResource;
+use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\ResourceValidator;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -9,36 +10,54 @@ use Illuminate\Support\Facades\Hash;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Auth\AuthenticationException;
+use Symfony\Component\HttpFoundation\Response;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 
-class AuthResource extends BasicResource
+final class AuthResource extends BasicResource
 {
-    protected function loginRequest(Request $request, ResourceValidator $validator): static
+    protected function loginRequest(
+        Request $request, 
+        OutputBuilder $outputBuilder,
+        ResourceValidator $validator,
+    ): static
     {
         $validator->validate($request);
 
         if ($validator->errors() !== null) {
-            $this->setResponse(['error' => $validator->errors()], 400);
+            $outputBuilder
+                ->setStatus('invalid.arguments')
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setError($validator->errors());
             return $this;
         }
 
         $credentials = $request->only('email', 'password');
         
         if (!$token = JWTAuth::attempt($credentials)) {
-            $this->setResponse(['error' => 'Invalid credentials'], 401);
+            $outputBuilder
+                ->setStatus('invalid.credentials')
+                ->setCode(Response::HTTP_UNAUTHORIZED)
+                ->setError('invalid credentials');
             return $this;
         }
 
-        $this->setResponse(['token' => $token]);
+        $outputBuilder->setData(['token' => $token]);
         return $this;
     }
 
-    protected function registerRequest(Request $request, ResourceValidator $validator): static
+    protected function registerRequest(
+        Request $request, 
+        OutputBuilder $outputBuilder,
+        ResourceValidator $validator,
+    ): static
     {
         $validator->validate($request);
 
         if ($validator->errors() !== null) {
-            $this->setResponse(['error' => $validator->errors()], 400);
+            $outputBuilder
+                ->setStatus('invalid.arguments')
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setError($validator->errors());
             return $this;
         }
 
@@ -50,23 +69,28 @@ class AuthResource extends BasicResource
 
         $token = JWTAuth::fromUser($user);
 
-        $this->setResponse(['token' => $token], 201);
+        $outputBuilder->setData(['token' => $token]);
 
         return $this;
     }
 
-    protected function refreshRequest(Request $request): static
+    protected function refreshRequest(
+        Request $request,
+        OutputBuilder $outputBuilder,
+    ): static
     {
         if ($request->bearerToken() === null) {
             throw new AuthenticationException();
         }
 
+        $outputBuilder->setCode(Response::HTTP_CREATED);
+
         try {
             JWTAuth::parseToken()->authenticate();
-            $this->setResponse(['token' => JWTAuth::getToken()->get()], 201);
+            $outputBuilder->setData(['token' => JWTAuth::getToken()->get()]);
         } catch (TokenExpiredException $e) {
             $token = JWTAuth::parseToken()->refresh();
-            $this->setResponse(['token' => $token], 201);
+            $outputBuilder->setData(['token' => $token]);
         } catch (JWTException $e) {
             throw new AuthenticationException();
         }
@@ -74,9 +98,12 @@ class AuthResource extends BasicResource
         return $this;
     }
 
-    protected function profileRequest(Request $request): static
+    protected function profileRequest(
+        Request $request,
+        OutputBuilder $outputBuilder,
+    ): static
     {
-        $this->setResponse(['profile' => auth()->user()]);
+        $outputBuilder->setData(['profile' => auth()->user()]);
         return $this;
     }
 }

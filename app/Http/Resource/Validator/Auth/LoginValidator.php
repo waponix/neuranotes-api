@@ -3,7 +3,7 @@ namespace App\Http\Resource\Validator\Auth;
 
 use App\Http\Api\BasicResourceValidator;
 
-class LoginValidator extends BasicResourceValidator
+final class LoginValidator extends BasicResourceValidator
 {
     public function rules(): array
     {
