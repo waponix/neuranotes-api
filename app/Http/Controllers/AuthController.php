@@ -36,7 +36,10 @@ class AuthController extends Controller
         return $authResource->handleRefreshRequest($request);
     }
 
-    public function profile(Request $request, AuthResource $authResource)
+    public function profile(
+        Request $request, 
+        AuthResource $authResource,
+    )
     {
         return $authResource->handleProfileRequest($request);
     }

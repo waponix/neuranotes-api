@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,6 +29,14 @@ Route::prefix('auth')->group(function () {
 
     });
     
+});
+
+Route::controller(ChatController::class)->group(function () {
+       
+    Route::middleware('auth:api')->group(function () {
+        Route::post('/chat', 'chat');
+    });
+
 });
 
 Route::fallback(function () {
