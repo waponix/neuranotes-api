@@ -1,7 +1,7 @@
 <?php
 namespace App\LLM;
 
-abstract class LLamaApi
+abstract class LlamaApi
 {
     const URL = 'ollama:11434/api/';
 

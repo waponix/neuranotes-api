@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\NoteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,6 +30,21 @@ Route::prefix('auth')->group(function () {
 
     });
     
+});
+
+Route::controller(NoteController::class)->group(function () {
+       
+    Route::middleware('auth:api')->group(function () {
+        Route::get('/note/{noteId}', 'get');
+        Route::post('/note', 'create');
+        Route::put('/note/{noteId}', 'update');
+        Route::delete('/note/{noteId}', 'delete');
+        Route::post('/note/{noteId}/pin', 'pin');
+        Route::post('/note/{noteId}/unpin', 'unpin');
+        Route::post('/note/{noteId}/star', 'star');
+        Route::post('/note/{noteId}/unstar', 'unstar');
+    });
+
 });
 
 Route::controller(ChatController::class)->group(function () {

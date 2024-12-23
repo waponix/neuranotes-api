@@ -5,7 +5,7 @@ use Illuminate\Http\Request;
 
 class Llama extends LlamaApi
 {
-    const MODEL = 'llama3.2';
+    const MODEL = 'llama2';
 
     public function embed(string $input): mixed
     {
