@@ -1,20 +1,20 @@
 version: '3.9'
 
 services:
-  api_chat:
+  api_app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: api_chat
+    container_name: api_app
     working_dir: /var/www/html
     volumes:
       - ./:/var/www/html
     networks:
-      - network_chat
+      - network_app
       - network_ai
 
   server_nginx:
-    image: nginx:latest
+    image: nginx:alpine
     container_name: server_nginx
     ports:
       - "8000:80"
@@ -23,10 +23,10 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./nginx/snippets:/etc/nginx/snippets
     depends_on:
-      - api_chat
+      - api_app
       - ollama
     networks:
-      - network_chat
+      - network_app
       - network_ai
 
   db_mysql:
@@ -40,7 +40,20 @@ services:
       MYSQL_USER: chat_app
       MYSQL_PASSWORD: root
     networks:
-      - network_chat
+      - network_app
+
+  db_redis:
+    image: redis/redis-stack:latest
+    container_name: db_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis:/usr/local/etc/redis
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    environment:
+      - REDIS_PASSWORD=redisAdmin123
+    networks:
+      - network_app
 
   adminer:
     image: adminer:latest
@@ -51,7 +64,7 @@ services:
     depends_on:
       - db_mysql
     networks:
-      - network_chat
+      - network_app
 
   ollama:
     build:
@@ -75,7 +88,7 @@ volumes:
   ollama:
 
 networks:
-  network_chat:
+  network_app:
     driver: bridge
   network_ai:
     driver: bridge

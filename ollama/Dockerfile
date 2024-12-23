@@ -1,3 +1,6 @@
 FROM ollama/ollama:latest
 
-CMD ["ollama", "run", "llama3.2"]
+# RUN ollama run llama3.2
+
+# Set working directory
+WORKDIR /var
