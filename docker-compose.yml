@@ -67,9 +67,7 @@ services:
       - network_app
 
   ollama:
-    build:
-      context: ./ollama
-      dockerfile: Dockerfile
+    image: ollama/ollama:latest
     container_name: ollama
     volumes:
       - 'ollama:/root/.ollama'
@@ -80,6 +78,8 @@ services:
         reservations:
           devices:
             - capabilities: ["gpu"]
+    # command: ["ollama", "pull", "llama2:7b", "&&", "ollama", "pull", "nomic-embed-text"]
+      
     networks:
       - network_ai
     restart: unless-stopped

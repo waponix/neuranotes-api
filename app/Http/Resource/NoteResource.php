@@ -4,17 +4,16 @@ namespace App\Http\Resource;
 use App\Http\Api\BasicResource;
 use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\ResourceValidator;
-use App\LLM\Llama;
+use App\LLM\Assistant;
 use App\Models\Note;
 use Illuminate\Database\RecordsNotFoundException;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response as HttpResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 final class NoteResource extends BasicResource
 {
     public function __construct(
-        private readonly Llama $llama,
+        private readonly Assistant $assistant,
         OutputBuilder $outputBuilder,
         ResourceValidator ...$resourceValidators,
     )
@@ -34,7 +33,7 @@ final class NoteResource extends BasicResource
             $note = new Note("$userId:$id");
         } catch (RecordsNotFoundException $e) {
             $outputBuilder
-                ->setCode(HttpResponse::HTTP_BAD_REQUEST)
+                ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('record.not.found');
             return $this;
         }
@@ -61,17 +60,14 @@ final class NoteResource extends BasicResource
             return $this;
         }
 
-        $embedding = $this->llama->embed(trim($request->get('content')));
-
-        if (isset($embedding['embeddings'], $embedding['embeddings'][0])) {
-            $embedding = $embedding['embeddings'][0];
-        }
-
         $note = new Note();
-
-        $note->title = trim($request->get('title'));
-        $note->content = trim($request->get('content'));
-        $note->embeddings = pack('f*', ...$embedding);
+        $note->title = $title = trim($request->get('title'));
+        $note->content = $content = trim($request->get('content'));
+        
+        $content = "Title: $title\nContent: $content";
+        $embeddings = $this->assistant->embed($content)['embeddings'];
+        $note->embeddings = $embeddings;
+        
         $note->userId = auth()->user()->id;
 
         try {
@@ -114,20 +110,18 @@ final class NoteResource extends BasicResource
             $note = new Note("$userId:$noteId");
         } catch (RecordsNotFoundException $e) {
             $outputBuilder
-                ->setCode(HttpResponse::HTTP_BAD_REQUEST)
+                ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('record.not.found');
             return $this;
         }
 
-        $note->title = trim($request->get('title'));
-        $note->content = trim($request->get('content'));
+        $note->title = $title = trim($request->get('title'));
+        $note->content = $content = trim($request->get('content'));
 
-        $embedding = $this->llama->embed(trim($request->get('content')));
+        $content = "Title: $title\nContent: $content";
+        $embeddings = $this->assistant->embed($content)['embeddings'];
 
-        if (isset($embedding['embeddings'], $embedding['embeddings'][0])) {
-            $embedding = $embedding['embeddings'][0];
-        }
-        $note->embeddings = pack('f*', ...$embedding);
+        $note->embeddings = $embeddings;
 
         try {
             $note->save();
@@ -180,7 +174,7 @@ final class NoteResource extends BasicResource
             $note->pin();
         } catch (\Throwable $e) {
             $outputBuilder
-                ->setCode(HttpResponse::HTTP_BAD_REQUEST)
+                ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('operation.failed');
             return $this;
         }
@@ -201,7 +195,7 @@ final class NoteResource extends BasicResource
             $note->unpin();
         } catch (\Throwable $e) {
             $outputBuilder
-                ->setCode(HttpResponse::HTTP_BAD_REQUEST)
+                ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('operation.failed');
             return $this;
         }
@@ -222,7 +216,7 @@ final class NoteResource extends BasicResource
             $note->star();
         } catch (\Throwable $e) {
             $outputBuilder
-                ->setCode(HttpResponse::HTTP_BAD_REQUEST)
+                ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('operation.failed');
             return $this;
         }
@@ -243,7 +237,7 @@ final class NoteResource extends BasicResource
             $note->unstar();
         } catch (\Throwable $e) {
             $outputBuilder
-                ->setCode(HttpResponse::HTTP_BAD_REQUEST)
+                ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('operation.failed');
             return $this;
         }
