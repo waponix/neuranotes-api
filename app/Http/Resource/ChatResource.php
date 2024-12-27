@@ -4,13 +4,13 @@ namespace App\Http\Resource;
 use App\Http\Api\BasicResource;
 use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\ResourceValidator;
-use App\LLM\Llama;
+use App\LLM\Assistant;
 use Illuminate\Http\Request;
 
 final class ChatResource extends BasicResource
 {
     public function __construct(
-        private readonly Llama $llama,
+        private readonly Assistant $assistant,
         OutputBuilder $outputBuilder, 
         ResourceValidator ...$resourceValidators,
     )
@@ -34,7 +34,7 @@ final class ChatResource extends BasicResource
             return $this;
         }
 
-        $embeddings = $this->llama->embed($request->get('message'));
+        $embeddings = $this->assistant->embed($request->get('message'));
         
         $outputBuilder
             ->setData($embeddings)

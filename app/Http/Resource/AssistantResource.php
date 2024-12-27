@@ -34,39 +34,6 @@ final class AssistantResource extends BasicResource
         $token = $request->get('token');
         $question = trim($request->get('query'));
 
-        $embeddings = pack('f*', ...$this->assistant->embed($question)['embeddings']);
-
-        $userId = auth()->user()->id;
-
-        $query = [
-            'FT.SEARCH',
-            'idx:notes',
-            '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
-            'SORTBY', '__vector_score', "ASC",
-            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 10,
-            'RETURN', 2, '$.title', '$.content',
-            'DIALECT', 2,
-        ];
-
-        $response = Redis::executeRaw($query);
-
-        $notes = [];
-        $count = array_shift($response);
-
-        while (count($response) > 0) {
-            $key = array_shift($response);
-            list(,,$id) = explode(':', $key);
-            $notes[$key] = new Note($id, false);
-            $fields = array_shift($response);
-
-            while (count($fields) > 0) {
-                $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
-            }
-        }
-
-        $prompt = file_get_contents(__DIR__ . '/../../LLM/assistant_role.txt');
-        // $prompt = str_replace('<NOTES>', implode("\n", array_values($notes)), $prompt);
-
         $convo = [];
         if ($token !== null) {
             try {
@@ -79,13 +46,56 @@ final class AssistantResource extends BasicResource
                     ->setError([
                         'token' => 'invalid token'
                     ]);
+
+                return $this;
+            }
+        } else {
+            // load source notes during first interaction
+            $embeddings = pack('f*', ...$this->assistant->embed($question)['embeddings']);
+
+            $userId = auth()->user()->id;
+
+            $query = [
+                'FT.SEARCH',
+                'idx:notes',
+                '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
+                'SORTBY', '__vector_score', "ASC",
+                'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 10,
+                'RETURN', 2, '$.title', '$.content',
+                'DIALECT', 2,
+            ];
+
+            $response = Redis::executeRaw($query);
+
+            $notes = [];
+            $count = array_shift($response);
+
+            while (count($response) > 0) {
+                $key = array_shift($response);
+                list(,,$id) = explode(':', $key);
+                $notes[$key] = new Note($id, false);
+                $fields = array_shift($response);
+
+                while (count($fields) > 0) {
+                    $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
+                }
             }
         }
 
-        $convo[] = [
-            'role' => 'user',
-            'content' => "Here is the question:\n[" . $question . "]\n\nSource notes:\n[" . implode("\n", array_values($notes)) . "]"
-        ];
+        $prompt = file_get_contents(__DIR__ . '/../../LLM/assistant_role.txt');
+
+        if ($token === null) {
+            $convo[] = [
+                'role' => 'user',
+                'content' => "Here is the question \n[" . $question . "] Please find your answer in the provided notes below:\n[" . implode("\n", array_values($notes)) . "]"
+            ];
+        } else {
+            // This is a follow up question and will not trigger loading anymore source notes
+            $convo[] = [
+                'role' => 'user',
+                'content' => $question,
+            ];
+        }
 
         $response = $this->assistant->generate([
             [

@@ -15,7 +15,7 @@ final class Note
 
     public string $content = '';
 
-    public string $embeddings = '';
+    public array $embeddings = [];
 
     public bool $pinned = false;
 
@@ -27,28 +27,35 @@ final class Note
 
     public int $updatedAt = 0;
 
-    public function __construct(?string $id = null)
+    public function __construct(?string $id = null, bool $load = true)
     {
         if ($id === null) {
             $this->id = str_replace('-', '', Str::uuid()->toString());
             return;
         }
 
-        $note = Redis::hgetall("note:$id");
+        if ($load === false) {
+            $this->id = $id;
+            return;
+        }
 
-        if (empty($note)) {
+        $query = ['JSON.GET', "note:$id"];
+
+        $row = json_decode(Redis::executeRaw($query), true);
+
+        if (empty($row)) {
             throw new RecordsNotFoundException("The note with key $id is not found");
         }
 
-        $this->id = (string) $note['id'];
-        $this->userId = (int) $note['user_id'];
-        $this->title = (string) $note['title'];
-        $this->content = (string) $note['content'];
-        $this->pinned = (bool) $note['pinned'];
-        $this->starred = (bool) $note['starred'];
-        $this->tags = trim($note['tags']) !== '' ? explode(',', $note['tags']) : [];
-        $this->createdAt = (int) $note['created_at'];
-        $this->updatedAt = (int) $note['updated_at'];
+        $this->id = (string) $row['id'];
+        $this->userId = (int) $row['user_id'];
+        $this->title = (string) $row['title'];
+        $this->content = (string) $row['content'];
+        $this->pinned = (bool) $row['pinned'];
+        $this->starred = (bool) $row['starred'];
+        $this->tags = $row['tags'] !== '' ? explode(',', $row['tags']) : [];
+        $this->createdAt = (int) $row['created_at'];
+        $this->updatedAt = (int) $row['updated_at'];
     }
 
     public function serialize(): array
@@ -76,18 +83,38 @@ final class Note
 
         $this->updatedAt = $now->getTimestamp();
 
-        Redis::hmset($this->key(), [
-            'id' => $this->id,
-            'user_id' => $this->userId,
-            'embeddings' => $this->embeddings, // Store as binary
-            'title' => $this->title,
-            'content' => $this->content,
-            'pinned' => $this->pinned,
-            'starred' => $this->starred,
-            'tags' => implode(',', $this->tags),
-            'created_at' => $this->createdAt,
-            'updated_at' => $this->updatedAt,
-        ]);
+        $query = [
+            'JSON.SET',
+            $this->key(),
+            '$',
+            json_encode([
+                'id' => $this->id,
+                'user_id' => $this->userId,
+                'embeddings' => $this->embeddings, // Store as binary
+                'title' => $this->title,
+                'content' => $this->content,
+                'pinned' => $this->pinned,
+                'starred' => $this->starred,
+                'tags' => implode(',', $this->tags),
+                'created_at' => $this->createdAt,
+                'updated_at' => $this->updatedAt,
+            ])
+        ];
+
+        Redis::executeRaw($query);
+
+        // Redis::hmset($this->key(), [
+        //     'id' => $this->id,
+        //     'user_id' => $this->userId,
+        //     'embeddings' => $this->embeddings, // Store as binary
+        //     'title' => $this->title,
+        //     'content' => $this->content,
+        //     'pinned' => $this->pinned,
+        //     'starred' => $this->starred,
+        //     'tags' => implode(',', $this->tags),
+        //     'created_at' => $this->createdAt,
+        //     'updated_at' => $this->updatedAt,
+        // ]);
 
         return $this;
     }
@@ -124,6 +151,13 @@ final class Note
         $this->starred = false;
         Redis::hset($this->key(), 'starred', $this->starred);
         return $this;
+    }
+
+    public function __toString()
+    {
+        return
+            "Title: " . $this->title . "\n" .
+            "Content: " . $this->content . "\n";
     }
 
     private function key(): string

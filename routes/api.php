@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssistantController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChatController;
@@ -35,25 +36,33 @@ Route::prefix('auth')->group(function () {
 Route::controller(NoteController::class)->group(function () {
        
     Route::middleware('auth:api')->group(function () {
-        Route::get('/note/{noteId}', 'get');
-        Route::post('/note', 'create');
-        Route::put('/note/{noteId}', 'update');
-        Route::delete('/note/{noteId}', 'delete');
-        Route::post('/note/{noteId}/pin', 'pin');
-        Route::post('/note/{noteId}/unpin', 'unpin');
-        Route::post('/note/{noteId}/star', 'star');
-        Route::post('/note/{noteId}/unstar', 'unstar');
+        Route::get('/notes/{noteId}', 'get');
+        Route::post('/notes', 'create');
+        Route::put('/notes/{noteId}', 'update');
+        Route::delete('/notes/{noteId}', 'delete');
+        Route::post('/notes/{noteId}/pin', 'pin');
+        Route::post('/notes/{noteId}/unpin', 'unpin');
+        Route::post('/notes/{noteId}/star', 'star');
+        Route::post('/notes/{noteId}/unstar', 'unstar');
     });
 
 });
 
-Route::controller(ChatController::class)->group(function () {
-       
+Route::controller(AssistantController::class)->group(function () {
+    
     Route::middleware('auth:api')->group(function () {
-        Route::post('/chat', 'chat');
+        Route::post('/assistant/notes/query', 'generalNotesQuery');
     });
 
 });
+
+// Route::controller(ChatController::class)->group(function () {
+       
+//     Route::middleware('auth:api')->group(function () {
+//         Route::post('/chat', 'chat');
+//     });
+
+// });
 
 Route::fallback(function () {
     return response()->json([
