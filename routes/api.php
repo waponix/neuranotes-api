@@ -23,7 +23,7 @@ Route::prefix('auth')->group(function () {
         
         Route::post('/login', 'login');
         Route::post('/register', 'register');
-        Route::get('/refresh', 'refresh');
+        Route::post('/refresh', 'refresh');
 
         Route::middleware('auth:api')->group(function () {
             Route::get('/profile', 'profile');

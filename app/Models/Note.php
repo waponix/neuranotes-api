@@ -9,7 +9,7 @@ final class Note
 {
     public readonly string $id;
 
-    public int $userId;
+    public int $user_id;
 
     public string $title = '';
 
@@ -23,9 +23,9 @@ final class Note
 
     public array $tags = [];
 
-    public int $createdAt = 0;
+    public int $created_at = 0;
 
-    public int $updatedAt = 0;
+    public int $updated_at = 0;
 
     public function __construct(?string $id = null, bool $load = true)
     {
@@ -48,28 +48,28 @@ final class Note
         }
 
         $this->id = (string) $row['id'];
-        $this->userId = (int) $row['user_id'];
+        $this->user_id = (int) $row['user_id'];
         $this->title = (string) $row['title'];
         $this->content = (string) $row['content'];
         $this->pinned = (bool) $row['pinned'];
         $this->starred = (bool) $row['starred'];
         $this->tags = $row['tags'] !== '' ? explode(',', $row['tags']) : [];
-        $this->createdAt = (int) $row['created_at'];
-        $this->updatedAt = (int) $row['updated_at'];
+        $this->created_at = (int) $row['created_at'];
+        $this->updated_at = (int) $row['updated_at'];
     }
 
     public function serialize(): array
     {
         return [
             'id' => $this->id,
-            'user_id' => $this->userId,
+            'user_id' => $this->user_id,
             'title' => $this->title,
             'content' => $this->content,
             'pinned' => $this->pinned,
             'starred' => $this->starred,
             'tags' => $this->tags,
-            'created_at' => $this->createdAt,
-            'updated_at' => $this->updatedAt,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
         ];
     }
 
@@ -77,11 +77,11 @@ final class Note
     {
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
-        if ($this->createdAt === 0) {
-            $this->createdAt = $now->getTimestamp();
+        if ($this->created_at === 0) {
+            $this->created_at = $now->getTimestamp();
         }
 
-        $this->updatedAt = $now->getTimestamp();
+        $this->updated_at = $now->getTimestamp();
 
         $query = [
             'JSON.SET',
@@ -89,15 +89,15 @@ final class Note
             '$',
             json_encode([
                 'id' => $this->id,
-                'user_id' => $this->userId,
+                'user_id' => $this->user_id,
                 'embeddings' => $this->embeddings, // Store as binary
                 'title' => $this->title,
                 'content' => $this->content,
                 'pinned' => $this->pinned,
                 'starred' => $this->starred,
                 'tags' => implode(',', $this->tags),
-                'created_at' => $this->createdAt,
-                'updated_at' => $this->updatedAt,
+                'created_at' => $this->created_at,
+                'updated_at' => $this->updated_at,
             ])
         ];
 
@@ -105,15 +105,15 @@ final class Note
 
         // Redis::hmset($this->key(), [
         //     'id' => $this->id,
-        //     'user_id' => $this->userId,
+        //     'user_id' => $this->user_id,
         //     'embeddings' => $this->embeddings, // Store as binary
         //     'title' => $this->title,
         //     'content' => $this->content,
         //     'pinned' => $this->pinned,
         //     'starred' => $this->starred,
         //     'tags' => implode(',', $this->tags),
-        //     'created_at' => $this->createdAt,
-        //     'updated_at' => $this->updatedAt,
+        //     'created_at' => $this->created_at,
+        //     'updated_at' => $this->updated_at,
         // ]);
 
         return $this;
@@ -155,15 +155,15 @@ final class Note
 
     public function __toString()
     {
-        return
-            "Title: " . $this->title . "\n" .
-            "Content: " . $this->content . "\n";
+        $createdAt = new \DateTime;
+        $createdAt->setTimestamp($this->created_at);
+        return "[Title: " . $this->title . ", Date: " . $createdAt->format('Y/m/d H:i:s') . "]\n[Content: " . $this->content . "]";
     }
 
     private function key(): string
     {
         $id = $this->id;
-        $userId = $this->userId;
-        return "note:$userId:$id";
+        $user_id = $this->user_id;
+        return "note:$user_id:$id";
     }
 }

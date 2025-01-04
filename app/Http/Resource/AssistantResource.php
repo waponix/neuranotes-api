@@ -49,24 +49,27 @@ final class AssistantResource extends BasicResource
 
                 return $this;
             }
-        } else {
-            // load source notes during first interaction
-            $embeddings = pack('f*', ...$this->assistant->embed($question)['embeddings']);
+        }
 
-            $userId = auth()->user()->id;
+        $embeddings = pack('f*', ...$this->assistant->embed($question)['embeddings']);
 
-            $query = [
-                'FT.SEARCH',
-                'idx:notes',
-                '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
-                'SORTBY', '__vector_score', "ASC",
-                'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 10,
-                'RETURN', 2, '$.title', '$.content',
-                'DIALECT', 2,
-            ];
+        $userId = auth()->user()->id;
 
-            $response = Redis::executeRaw($query);
+        $query = [
+            'FT.SEARCH',
+            'idx:notes',
+            '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
+            'SORTBY', '__vector_score', "ASC",
+            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 5,
+            'RETURN', 3, '$.title', '$.content', '$.created_at',
+            'DIALECT', 2,
+        ];
 
+        $response = Redis::executeRaw($query);
+
+        $prompt = file_get_contents(__DIR__ . '/../../LLM/assistant_role.txt');        
+
+        if ($token === null) {
             $notes = [];
             $count = array_shift($response);
 
@@ -80,27 +83,32 @@ final class AssistantResource extends BasicResource
                     $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
                 }
             }
-        }
-
-        $prompt = file_get_contents(__DIR__ . '/../../LLM/assistant_role.txt');
-
-        if ($token === null) {
+            $noteCount = 1;
+            $notes = array_reduce(array_values($notes), function ($carry, $item) use (&$noteCount) {
+                $carry .= '### START OF NOTE ' . $noteCount . " ###\n" . $item . "\n### END OF NOTE " . $noteCount . " ###\n";
+                $noteCount ++;
+                return $carry;
+            }, '');
+        
             $convo[] = [
                 'role' => 'user',
-                'content' => "Here is the question \n[" . $question . "] Please find your answer in the provided notes below:\n[" . implode("\n", array_values($notes)) . "]"
+                'content' => "INPUT:\n" . $question . "\nREFERENCE:\n" . $notes . "OUTPUT:",
             ];
         } else {
-            // This is a follow up question and will not trigger loading anymore source notes
             $convo[] = [
                 'role' => 'user',
-                'content' => $question,
+                'content' => "FOLLOW UP INPUT:\n" . $question . " (Reminder: please find your answer from the reference only)\nOUTPUT:",
             ];
         }
 
         $response = $this->assistant->generate([
             [
+                'role' => 'user',
+                'content' => $prompt,
+            ],
+            [
                 'role' => 'assistant',
-                'content' => $prompt
+                'content' => "Sure, I'd be happy to help! Please provide the input question you would like me to answer.",
             ],
             ...$convo,
         ]);

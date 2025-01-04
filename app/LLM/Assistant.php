@@ -5,7 +5,7 @@ use Illuminate\Http\Request;
 
 class Assistant extends AssistantApi
 {
-    const LLM_MODEL = 'llama2';
+    const LLM_MODEL = 'llama3.2';
     const EMBEDDING_MODEL = 'nomic-embed-text';
 
     public function generate(array $input): mixed
