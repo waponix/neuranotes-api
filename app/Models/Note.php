@@ -153,11 +153,72 @@ final class Note
         return $this;
     }
 
+    public static function getByUserId(int $userId, int &$count): array
+    {
+        $query = [
+            'FT.SEARCH',
+            'idx:notes',
+            '(@user_id:[$userId $userId])',
+            'PARAMS', 4, 'userId', $userId, 'topK', 5,
+            'RETURN', 7, '$.title', '$.content', '$.created_at', '$.updated_at', '$.pinned', '$.starred', '$.user_id',
+            'DIALECT', 2,
+        ];
+
+        $response = Redis::executeRaw($query);
+        $count = (integer) array_shift($response);
+
+        $notes = [];
+
+        while (count($response) > 0) {
+            $key = array_shift($response);
+            list(,,$id) = explode(':', $key);
+            $notes[$key] = new self($id, false);
+            $fields = array_shift($response);
+
+            while (count($fields) > 0) {
+                $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
+            }
+        }
+
+        return $notes;
+    }
+
+    public static function searchWithEmbedding($userId, $embeddings)
+    {
+        $query = [
+            'FT.SEARCH',
+            'idx:notes',
+            '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
+            'SORTBY', '__vector_score', "ASC",
+            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 3,
+            'RETURN', 3, '$.title', '$.content', '$.created_at',
+            'DIALECT', 2,
+        ];
+
+        $response = Redis::executeRaw($query);
+        $count = array_shift($response);
+
+        $notes = [];
+
+        while (count($response) > 0) {
+            $key = array_shift($response);
+            list(,,$id) = explode(':', $key);
+            $notes[$key] = new self($id, false);
+            $fields = array_shift($response);
+
+            while (count($fields) > 0) {
+                $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
+            }
+        }
+
+        return $notes;
+    }
+
     public function __toString()
     {
         $createdAt = new \DateTime;
         $createdAt->setTimestamp($this->created_at);
-        return "[Title: " . $this->title . ", Date: " . $createdAt->format('Y/m/d H:i:s') . "]\n[Content: " . $this->content . "]";
+        return "### START OF NOTE " . $this->id . " ###\n[Title: " . $this->title . ", Date: " . $createdAt->format('Y/m/d H:i:s') . "]\n[Content: " . $this->content . "]\n### END OF NOTE " . $this->id . " ###";
     }
 
     private function key(): string

@@ -7,6 +7,14 @@ use Illuminate\Http\Request;
 
 final class NoteController extends Controller
 {
+    public function list(
+        Request $request,
+        NoteResource $noteResource,
+    )
+    {
+        return $noteResource->handleGetListRequest($request);
+    }
+
     public function get(
         string $noteId,
         Request $request,

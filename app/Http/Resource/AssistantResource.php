@@ -31,6 +31,22 @@ final class AssistantResource extends BasicResource
         OutputBuilder $outputBuilder,
     ): static
     {
+        // TODO: implement input validation
+        $role = (integer) $request->get('role');
+
+        switch ($role) {
+            case 2: $this->playRole2($request, $outputBuilder); break;
+            case 1: 
+            default: $this->playRole1($request, $outputBuilder);
+        }
+
+        return $this;
+    }
+
+    private function playRole1(
+        Request $request, 
+        OutputBuilder $outputBuilder
+    ) {
         $token = $request->get('token');
         $question = trim($request->get('query'));
 
@@ -51,54 +67,104 @@ final class AssistantResource extends BasicResource
             }
         }
 
-        $embeddings = pack('f*', ...$this->assistant->embed($question)['embeddings']);
-
-        $userId = auth()->user()->id;
-
-        $query = [
-            'FT.SEARCH',
-            'idx:notes',
-            '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
-            'SORTBY', '__vector_score', "ASC",
-            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 5,
-            'RETURN', 3, '$.title', '$.content', '$.created_at',
-            'DIALECT', 2,
-        ];
-
-        $response = Redis::executeRaw($query);
-
-        $prompt = file_get_contents(__DIR__ . '/../../LLM/assistant_role.txt');        
+        $prompt = file_get_contents(__DIR__ . '/../../LLM/_assistant_role.txt');  
+        $userId = auth()->user()->id;      
 
         if ($token === null) {
-            $notes = [];
-            $count = array_shift($response);
+            $keywordResponse = $this->assistant->generate([
+                [
+                    'role' => 'user',
+                    'content' => "INPUT:\nGive concise 20 list of comma separated positive related topics based on this phrase \"" . $question . "\"\nOUTPUT:"
+                ]
+            ]);
 
-            while (count($response) > 0) {
-                $key = array_shift($response);
-                list(,,$id) = explode(':', $key);
-                $notes[$key] = new Note($id, false);
-                $fields = array_shift($response);
-
-                while (count($fields) > 0) {
-                    $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
-                }
-            }
-            $noteCount = 1;
-            $notes = array_reduce(array_values($notes), function ($carry, $item) use (&$noteCount) {
-                $carry .= '### START OF NOTE ' . $noteCount . " ###\n" . $item . "\n### END OF NOTE " . $noteCount . " ###\n";
-                $noteCount ++;
-                return $carry;
-            }, '');
+            $toBeEmbedded = "[Phrase: $question, Keywords: " . $keywordResponse['message']['content'] . "]";
+            $embeddings = pack('f*', ...$this->assistant->embed($toBeEmbedded)['embeddings']);
+           
+            $notes = Note::searchWithEmbedding($userId, $embeddings);
         
             $convo[] = [
                 'role' => 'user',
-                'content' => "INPUT:\n" . $question . "\nREFERENCE:\n" . $notes . "OUTPUT:",
+                'content' => "INPUT:\n" . $question . " (Reminder: Please find your answer from the reference only without including the examples)" . "\nREFERENCE:\n" . implode("\n", $notes) . "OUTPUT:",
             ];
         } else {
-            $convo[] = [
-                'role' => 'user',
-                'content' => "FOLLOW UP INPUT:\n" . $question . " (Reminder: please find your answer from the reference only)\nOUTPUT:",
-            ];
+            // check if there is a need to fetch new reference
+            $loadReference = false;
+            do {
+                $verifyResponse = $this->assistant->generate([
+                    ...$convo,
+                    [
+                        'role' => 'user',
+                        'content' => "INPUT:\nBased from our conversation, determine if this phrase is still relevant to any of our topics \"" . 
+                        $question . "\", if yes answer with \"YES\" and if no answer with \"NO\" only, our conversation can jump from one topic to another so you have to take it into consideration.\nOUTPUT:"
+                    ]
+                ]);
+
+                if (stripos($verifyResponse['message']['content'], 'NO') !== false) {
+                    $loadReference = true;
+
+                    $keywordResponse = $this->assistant->generate([
+                        [
+                            'role' => 'user',
+                            'content' => "INPUT:\nGive concise 20 list of comma separated positive related topics based on this phrase \"" . 
+                            $question . "\" without introduction.\nOUTPUT:"
+                        ]
+                    ]);
+
+                    break;
+                }
+
+                $verifyResponse = $this->assistant->generate([
+                    ...$convo,
+                    [
+                        'role' => 'user',
+                        'content' => "INPUT:\nBased from our conversation, determine if this phrase is asking for you to re-check the current reference again or to check other reference \"" . 
+                        $question . "\", if yes answer with \"YES\" and if no answer with \"NO\" only.\nOUTPUT:"
+                    ]
+                ]);
+
+                if (stripos($verifyResponse['message']['content'], 'NO') !== false) {
+                    $loadReference = true;
+
+                    $keywordResponse = $this->assistant->generate([
+                        ...$convo,
+                        [
+                            'role' => 'user',
+                            'content' => "INPUT:\nGive concise 20 list of comma separated positive related topics based from our last topic with no introduction.\nOUTPUT:"
+                        ]
+                    ]);
+
+                    break;
+                }
+            } while(false);
+
+            $notes = null;
+            if ($loadReference === true) {
+                // get new embeddings for the keyword
+                $toBeEmbedded = "[Phrase: $question, Keywords: " . $keywordResponse['message']['content'] . "]";
+                $embeddings = pack('f*', ...$this->assistant->embed($toBeEmbedded)['embeddings']);
+                
+                $notes = Note::searchWithEmbedding($userId, $embeddings);
+                $noteCount = 1;
+            }
+
+            if ($notes === null) {
+                $convo[] = [
+                    'role' => 'user',
+                    'content' => "FOLLOW UP INPUT:\n" . 
+                    $question . 
+                    " (Reminder: Please find your answer from the reference only without including the examples)\nOUTPUT:",
+                ];
+            } else {
+                $convo[] = [
+                    'role' => 'user',
+                    'content' => "FOLLOW UP INPUT:\n" . 
+                    $question . 
+                    " (Reminder: Please find your answer from the reference only without including the examples)\nREFERENCE:\n" . 
+                    implode("\n", $notes) . "\nOUTPUT:",
+                ];
+            }
+           
         }
 
         $response = $this->assistant->generate([
@@ -109,6 +175,63 @@ final class AssistantResource extends BasicResource
             [
                 'role' => 'assistant',
                 'content' => "Sure, I'd be happy to help! Please provide the input question you would like me to answer.",
+            ],
+            ...$convo,
+        ]);
+
+        $convo[] = $response['message'];
+
+        $token = JWT::encode(['convo' => $convo], self::SECRET . ':' . auth()->user()->id, self::ALGO);
+
+        $outputBuilder->setData([
+            'answer' => $response['message']['content'],
+            'token' => $token,
+        ]);
+
+        return $this;
+    }
+
+    private function playRole2(
+        Request $request, 
+        OutputBuilder $outputBuilder
+    ) {
+        $token = $request->get('token');
+        $question = trim($request->get('query'));
+        $note = $request->get('note');
+
+        $convo = [];
+        if ($token !== null) {
+            try {
+                $token = JWT::decode($token, new Key(self::SECRET . ':' . auth()->user()->id, self::ALGO));
+                $convo = json_decode(json_encode($token->convo), true);
+            } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+                $outputBuilder
+                    ->setStatus('invalid.arguments')
+                    ->setCode(Response::HTTP_BAD_REQUEST)
+                    ->setError([
+                        'token' => 'invalid token'
+                    ]);
+
+                return $this;
+            }
+        }
+
+        $convo[] = [
+            'role' => 'user',
+            'content' => "INPUT:\n" . $question . " (Reminder: Focus on the current topic at hand and be mindful of the contents of the shared note, DO NOT at any means correlate the context from the example as it is only a guide)" . "\nSHARED NOTE:\n" . $note . "OUTPUT:",
+        ];
+
+        $prompt = file_get_contents(__DIR__ . '/../../LLM/_partner_role.txt');  
+        $userId = auth()->user()->id;
+
+        $response = $this->assistant->generate([
+            [
+                'role' => 'user',
+                'content' => $prompt,
+            ],
+            [
+                'role' => 'assistant',
+                'content' => "I'm thrilled to be your brainstorming partner!",
             ],
             ...$convo,
         ]);

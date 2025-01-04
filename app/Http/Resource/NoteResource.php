@@ -21,6 +21,32 @@ final class NoteResource extends BasicResource
         parent::__construct($outputBuilder, ...$resourceValidators);
     }
 
+    protected function getListRequest(
+        Request $request,
+        OutputBuilder $outputBuilder,
+    )
+    {
+        $userId = auth()->user()->id;
+        $count = 0;
+
+        try {
+            $notes = Note::getByUserId($userId, $count);
+        } catch (RecordsNotFoundException $e) {
+            $outputBuilder
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setStatus('record.not.found');
+            return $this;
+        }
+
+        $notes = array_map(fn ($note) => $note->serialize(), $notes);
+
+        $outputBuilder
+            ->addMeta('count', $count)
+            ->setData($notes);
+
+        return $this;
+    }
+
     protected function getRequest(
         Request $request,
         OutputBuilder $outputBuilder,
@@ -64,11 +90,11 @@ final class NoteResource extends BasicResource
         $note->title = $title = trim($request->get('title'));
         $note->content = $content = trim($request->get('content'));
         
-        $content = "Title: $title\nContent: $content";
+        $content = "Title: [$title]\nContent: [$content]";
         $embeddings = $this->assistant->embed($content)['embeddings'];
         $note->embeddings = $embeddings;
         
-        $note->userId = auth()->user()->id;
+        $note->user_id = auth()->user()->id;
 
         try {
             $note->save();
