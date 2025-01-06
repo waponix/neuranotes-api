@@ -50,6 +50,8 @@ final class AssistantResource extends BasicResource
         $token = $request->get('token');
         $question = trim($request->get('query'));
 
+        $reminder = '(Reminder: Always check and reference your role description from the very first message containing the engineering prompt before responding. Ensure your responses strictly align with your role as a helpful assistant that provides factual, concise, and note-backed answers based solely on the provided notes. Find your answer from the reference only without including the examples)';
+
         $convo = [];
         if ($token !== null) {
             try {
@@ -71,21 +73,13 @@ final class AssistantResource extends BasicResource
         $userId = auth()->user()->id;      
 
         if ($token === null) {
-            $keywordResponse = $this->assistant->generate([
-                [
-                    'role' => 'user',
-                    'content' => "INPUT:\nGive concise 20 list of comma separated positive related topics based on this phrase \"" . $question . "\"\nOUTPUT:"
-                ]
-            ]);
-
-            $toBeEmbedded = "[Phrase: $question, Keywords: " . $keywordResponse['message']['content'] . "]";
-            $embeddings = pack('f*', ...$this->assistant->embed($toBeEmbedded)['embeddings']);
+            $embeddings = pack('f*', ...$this->assistant->embed($question)['embeddings']);
            
             $notes = Note::searchWithEmbedding($userId, $embeddings);
         
             $convo[] = [
                 'role' => 'user',
-                'content' => "INPUT:\n" . $question . " (Reminder: Please find your answer from the reference only without including the examples)" . "\nREFERENCE:\n" . implode("\n", $notes) . "OUTPUT:",
+                'content' => "INPUT:\n" . $question . " " . $reminder . "\nREFERENCE:\n" . implode("\n", $notes) . "OUTPUT:",
             ];
         } else {
             // check if there is a need to fetch new reference
@@ -141,7 +135,7 @@ final class AssistantResource extends BasicResource
             $notes = null;
             if ($loadReference === true) {
                 // get new embeddings for the keyword
-                $toBeEmbedded = "[Phrase: $question, Keywords: " . $keywordResponse['message']['content'] . "]";
+                $toBeEmbedded = $keywordResponse['message']['content'];
                 $embeddings = pack('f*', ...$this->assistant->embed($toBeEmbedded)['embeddings']);
                 
                 $notes = Note::searchWithEmbedding($userId, $embeddings);
@@ -152,15 +146,17 @@ final class AssistantResource extends BasicResource
                 $convo[] = [
                     'role' => 'user',
                     'content' => "FOLLOW UP INPUT:\n" . 
-                    $question . 
-                    " (Reminder: Please find your answer from the reference only without including the examples)\nOUTPUT:",
+                    $question . ' ' . 
+                    $reminder . 
+                    "\nOUTPUT:",
                 ];
             } else {
                 $convo[] = [
                     'role' => 'user',
                     'content' => "FOLLOW UP INPUT:\n" . 
                     $question . 
-                    " (Reminder: Please find your answer from the reference only without including the examples)\nREFERENCE:\n" . 
+                    " " . 
+                    $reminder . "\nREFERENCE:\n" . 
                     implode("\n", $notes) . "\nOUTPUT:",
                 ];
             }
@@ -174,7 +170,7 @@ final class AssistantResource extends BasicResource
             ],
             [
                 'role' => 'assistant',
-                'content' => "Sure, I'd be happy to help! Please provide the input question you would like me to answer.",
+                'content' => "Understood! I will adhere to my role and ensure that my responses align strictly with the guidelines provided. I will stay in character, follow the rules set in the engineering prompt, and focus on delivering helpful, accurate, and context-appropriate responses at all times.",
             ],
             ...$convo,
         ]);
@@ -218,7 +214,7 @@ final class AssistantResource extends BasicResource
 
         $convo[] = [
             'role' => 'user',
-            'content' => "INPUT:\n" . $question . " (Reminder: Focus on the current topic at hand and be mindful of the contents of the shared note, DO NOT at any means correlate the context from the example as it is only a guide)" . "\nSHARED NOTE:\n" . $note . "OUTPUT:",
+            'content' => "INPUT:\n" . $question . " (Reminder: Always check and reference your role description from the very first message containing the engineering prompt before responding. Ensure your reply aligns with your role as a brainstorming partner, focusing on being clear, concise, collaborative, and supportive without overwhelming the user. And most importantly do not treat the example provided in the engineering prompt as the actual topic of discussion. The example is only a guide for tone, structure, and approach. Focus solely on the user’s current message and their specific topic of interest.)" . "\nSHARED NOTE:\n" . $note . "OUTPUT:",
         ];
 
         $prompt = file_get_contents(__DIR__ . '/../../LLM/_partner_role.txt');  
@@ -231,7 +227,7 @@ final class AssistantResource extends BasicResource
             ],
             [
                 'role' => 'assistant',
-                'content' => "I'm thrilled to be your brainstorming partner!",
+                'content' => "Understood! I will adhere to my role and ensure that my responses align strictly with the guidelines provided. I will stay in character, follow the rules set in the engineering prompt, and focus on delivering helpful, accurate, and context-appropriate responses at all times.",
             ],
             ...$convo,
         ]);

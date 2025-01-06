@@ -121,7 +121,8 @@ final class Note
 
     public function delete(): static
     {
-        Redis::del($this->key());
+        $query = ['DEL', $this->key()];
+        Redis::executeRaw($query);
         return $this;
     }
 
@@ -190,7 +191,7 @@ final class Note
             'idx:notes',
             '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
             'SORTBY', '__vector_score', "ASC",
-            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 3,
+            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 5,
             'RETURN', 3, '$.title', '$.content', '$.created_at',
             'DIALECT', 2,
         ];
