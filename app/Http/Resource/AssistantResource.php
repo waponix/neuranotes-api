@@ -50,7 +50,8 @@ final class AssistantResource extends BasicResource
         $token = $request->get('token');
         $question = trim($request->get('query'));
 
-        $reminder = '(Reminder: Always check and reference your role description from the very first message containing the engineering prompt before responding. Ensure your responses strictly align with your role as a helpful assistant that provides factual, concise, and note-backed answers based solely on the provided notes. Find your answer from the reference only without including the examples)';
+        $reminder = '(Important reminder: Always follow your role and stay in character)';
+        // $reminder = '';
 
         $convo = [];
         if ($token !== null) {
@@ -85,7 +86,7 @@ final class AssistantResource extends BasicResource
             // check if there is a need to fetch new reference
             $loadReference = false;
             do {
-                $verifyResponse = $this->assistant->generate([
+                $verifyResponse = $this->assistant->chat([
                     ...$convo,
                     [
                         'role' => 'user',
@@ -97,7 +98,7 @@ final class AssistantResource extends BasicResource
                 if (stripos($verifyResponse['message']['content'], 'NO') !== false) {
                     $loadReference = true;
 
-                    $keywordResponse = $this->assistant->generate([
+                    $keywordResponse = $this->assistant->chat([
                         [
                             'role' => 'user',
                             'content' => "INPUT:\nGive concise 20 list of comma separated positive related topics based on this phrase \"" . 
@@ -108,7 +109,7 @@ final class AssistantResource extends BasicResource
                     break;
                 }
 
-                $verifyResponse = $this->assistant->generate([
+                $verifyResponse = $this->assistant->chat([
                     ...$convo,
                     [
                         'role' => 'user',
@@ -120,7 +121,7 @@ final class AssistantResource extends BasicResource
                 if (stripos($verifyResponse['message']['content'], 'NO') !== false) {
                     $loadReference = true;
 
-                    $keywordResponse = $this->assistant->generate([
+                    $keywordResponse = $this->assistant->chat([
                         ...$convo,
                         [
                             'role' => 'user',
@@ -163,14 +164,10 @@ final class AssistantResource extends BasicResource
            
         }
 
-        $response = $this->assistant->generate([
+        $response = $this->assistant->chat([
             [
-                'role' => 'user',
+                'role' => 'system',
                 'content' => $prompt,
-            ],
-            [
-                'role' => 'assistant',
-                'content' => "Understood! I will adhere to my role and ensure that my responses align strictly with the guidelines provided. I will stay in character, follow the rules set in the engineering prompt, and focus on delivering helpful, accurate, and context-appropriate responses at all times.",
             ],
             ...$convo,
         ]);
@@ -194,6 +191,8 @@ final class AssistantResource extends BasicResource
         $token = $request->get('token');
         $question = trim($request->get('query'));
         $note = $request->get('note');
+        // $reminder = '(Reminder: Always stick to your role and stay in character; Answer direct, concise and stay relevant to the topic; Keep your tone as energetic and optimistic as possible with a deep interest in the discussion)';
+        $reminder = '';
 
         $convo = [];
         if ($token !== null) {
@@ -214,20 +213,16 @@ final class AssistantResource extends BasicResource
 
         $convo[] = [
             'role' => 'user',
-            'content' => "INPUT:\n" . $question . " (Reminder: Always check and reference your role description from the very first message containing the engineering prompt before responding. Ensure your reply aligns with your role as a brainstorming partner, focusing on being clear, concise, collaborative, and supportive without overwhelming the user. And most importantly do not treat the example provided in the engineering prompt as the actual topic of discussion. The example is only a guide for tone, structure, and approach. Focus solely on the user’s current message and their specific topic of interest.)" . "\nSHARED NOTE:\n" . $note . "OUTPUT:",
+            'content' => "INPUT:\n" . $question . " " . $reminder . "\nSHARED NOTE:\n" . $note . "OUTPUT:",
         ];
 
-        $prompt = file_get_contents(__DIR__ . '/../../LLM/_partner_role.txt');  
+        $prompt = file_get_contents(__DIR__ . '/../../LLM/_partner_role_v2.txt');  
         $userId = auth()->user()->id;
 
-        $response = $this->assistant->generate([
+        $response = $this->assistant->chat([
             [
-                'role' => 'user',
+                'role' => 'system',
                 'content' => $prompt,
-            ],
-            [
-                'role' => 'assistant',
-                'content' => "Understood! I will adhere to my role and ensure that my responses align strictly with the guidelines provided. I will stay in character, follow the rules set in the engineering prompt, and focus on delivering helpful, accurate, and context-appropriate responses at all times.",
             ],
             ...$convo,
         ]);

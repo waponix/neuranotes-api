@@ -4,6 +4,7 @@ namespace App\Models;
 use Illuminate\Database\RecordsNotFoundException;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
+use App\LLM\Assistant;
 
 final class Note
 {
@@ -26,6 +27,8 @@ final class Note
     public int $created_at = 0;
 
     public int $updated_at = 0;
+
+    public float $__vector_score = 1.0;
 
     public function __construct(?string $id = null, bool $load = true)
     {
@@ -160,7 +163,7 @@ final class Note
             'FT.SEARCH',
             'idx:notes',
             '(@user_id:[$userId $userId])',
-            'PARAMS', 4, 'userId', $userId, 'topK', 5,
+            'PARAMS', 2, 'userId', $userId,
             'RETURN', 7, '$.title', '$.content', '$.created_at', '$.updated_at', '$.pinned', '$.starred', '$.user_id',
             'DIALECT', 2,
         ];
@@ -172,12 +175,12 @@ final class Note
 
         while (count($response) > 0) {
             $key = array_shift($response);
-            list(,,$id) = explode(':', $key);
-            $notes[$key] = new self($id, false);
+            list(,,$noteId) = explode(':', $key);
+            $notes[$noteId] = new self($noteId, false);
             $fields = array_shift($response);
 
             while (count($fields) > 0) {
-                $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
+                $notes[$noteId]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
             }
         }
 
@@ -191,8 +194,8 @@ final class Note
             'idx:notes',
             '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
             'SORTBY', '__vector_score', "ASC",
-            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 5,
-            'RETURN', 3, '$.title', '$.content', '$.created_at',
+            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 10,
+            'RETURN', 4, '$.title', '$.content', '$.created_at', '__vector_score',
             'DIALECT', 2,
         ];
 
@@ -203,12 +206,14 @@ final class Note
 
         while (count($response) > 0) {
             $key = array_shift($response);
-            list(,,$id) = explode(':', $key);
-            $notes[$key] = new self($id, false);
+            list(,,$noteId) = explode(':', $key);
+            $notes[$noteId] = new self($noteId, false);
             $fields = array_shift($response);
 
             while (count($fields) > 0) {
-                $notes[$key]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
+                $fKey = array_shift($fields);
+                $fValue = array_shift($fields);
+                $notes[$noteId]->{str_replace('$.', '', $fKey)} = $fValue;
             }
         }
 

@@ -34,8 +34,9 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::controller(NoteController::class)->group(function () {
-       
+
     Route::middleware('auth:api')->group(function () {
+        Route::get('/notes', 'list');
         Route::get('/notes/{noteId}', 'get');
         Route::post('/notes', 'create');
         Route::put('/notes/{noteId}', 'update');

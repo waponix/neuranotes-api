@@ -90,7 +90,10 @@ final class NoteResource extends BasicResource
         $note->title = $title = trim($request->get('title'));
         $note->content = $content = trim($request->get('content'));
         
-        $content = "Title: [$title]\nContent: [$content]";
+        // TODO: The way the created date it set here is dangerous,
+        // since it might not exactly match the actual date after save
+        $creationDate = new \DateTimeImmutable;
+        $content = "[Title: $title, Author: " . auth()->user()->name . ", Date: " . $creationDate->format('Y-m-d H:i:s') . "]\n[Content: $content]";
         $embeddings = $this->assistant->embed($content)['embeddings'];
         $note->embeddings = $embeddings;
         
@@ -144,7 +147,9 @@ final class NoteResource extends BasicResource
         $note->title = $title = trim($request->get('title'));
         $note->content = $content = trim($request->get('content'));
 
-        $content = "Title: $title\nContent: $content";
+        $creationDate = new \DateTimeImmutable;
+        $creationDate->setTimestamp($note->created_at);
+        $content = "[Title: $title, Author: " . auth()->user()->name . ", Date: " . $creationDate->format('Y-m-d H:i:s') . "]\n[Content: $content]";
         $embeddings = $this->assistant->embed($content)['embeddings'];
 
         $note->embeddings = $embeddings;
