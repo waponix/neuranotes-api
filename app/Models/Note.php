@@ -1,236 +1,73 @@
 <?php
+
 namespace App\Models;
 
-use Illuminate\Database\RecordsNotFoundException;
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use App\LLM\Assistant;
 
-final class Note
+class Note extends Model
 {
-    public readonly string $id;
+    use HasFactory;
+    use SerializeTrait;
 
-    public int $user_id;
+    /**
+     *
+     * @var string
+     */
+    protected $table = 'notes';
 
-    public string $title = '';
+    /**
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'uuid',
+        'title',
+        'content',
+        'user_id',
+        'pinned',
+        'starred',
+    ];
 
-    public string $content = '';
+    /**
+     * 
+     * @var array
+     */
+    protected $private = [
+        'user_id',
+    ];
 
-    public array $embeddings = [];
 
-    public bool $pinned = false;
+    protected $casts = [
+        'created_at' => 'timestamp',
+        'updated_at' => 'timestamp',
+    ];
 
-    public bool $starred = false;
-
-    public array $tags = [];
-
-    public int $created_at = 0;
-
-    public int $updated_at = 0;
-
-    public float $__vector_score = 1.0;
-
-    public function __construct(?string $id = null, bool $load = true)
+    protected static function boot()
     {
-        if ($id === null) {
-            $this->id = str_replace('-', '', Str::uuid()->toString());
-            return;
-        }
+        parent::boot();
 
-        if ($load === false) {
-            $this->id = $id;
-            return;
-        }
-
-        $query = ['JSON.GET', "note:$id"];
-
-        $row = json_decode(Redis::executeRaw($query), true);
-
-        if (empty($row)) {
-            throw new RecordsNotFoundException("The note with key $id is not found");
-        }
-
-        $this->id = (string) $row['id'];
-        $this->user_id = (int) $row['user_id'];
-        $this->title = (string) $row['title'];
-        $this->content = (string) $row['content'];
-        $this->pinned = (bool) $row['pinned'];
-        $this->starred = (bool) $row['starred'];
-        $this->tags = $row['tags'] !== '' ? explode(',', $row['tags']) : [];
-        $this->created_at = (int) $row['created_at'];
-        $this->updated_at = (int) $row['updated_at'];
-    }
-
-    public function serialize(): array
-    {
-        return [
-            'id' => $this->id,
-            'user_id' => $this->user_id,
-            'title' => $this->title,
-            'content' => $this->content,
-            'pinned' => $this->pinned,
-            'starred' => $this->starred,
-            'tags' => $this->tags,
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
-        ];
-    }
-
-    public function save(): static
-    {
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-
-        if ($this->created_at === 0) {
-            $this->created_at = $now->getTimestamp();
-        }
-
-        $this->updated_at = $now->getTimestamp();
-
-        $query = [
-            'JSON.SET',
-            $this->key(),
-            '$',
-            json_encode([
-                'id' => $this->id,
-                'user_id' => $this->user_id,
-                'embeddings' => $this->embeddings, // Store as binary
-                'title' => $this->title,
-                'content' => $this->content,
-                'pinned' => $this->pinned,
-                'starred' => $this->starred,
-                'tags' => implode(',', $this->tags),
-                'created_at' => $this->created_at,
-                'updated_at' => $this->updated_at,
-            ])
-        ];
-
-        Redis::executeRaw($query);
-
-        // Redis::hmset($this->key(), [
-        //     'id' => $this->id,
-        //     'user_id' => $this->user_id,
-        //     'embeddings' => $this->embeddings, // Store as binary
-        //     'title' => $this->title,
-        //     'content' => $this->content,
-        //     'pinned' => $this->pinned,
-        //     'starred' => $this->starred,
-        //     'tags' => implode(',', $this->tags),
-        //     'created_at' => $this->created_at,
-        //     'updated_at' => $this->updated_at,
-        // ]);
-
-        return $this;
-    }
-
-    public function delete(): static
-    {
-        $query = ['DEL', $this->key()];
-        Redis::executeRaw($query);
-        return $this;
-    }
-
-    public function pin(): static
-    {
-        $this->pinned = true;
-        Redis::hset($this->key(), 'pinned', $this->pinned);
-        return $this;
-    }
-
-    public function unpin(): static
-    {
-        $this->pinned = false;
-        Redis::hset($this->key(), 'pinned', $this->pinned);
-        return $this;
-    }
-
-    public function star(): static
-    {
-        $this->starred = true;
-        Redis::hset($this->key(), 'starred', $this->starred);
-        return $this;
-    }
-
-    public function unstar(): static
-    {
-        $this->starred = false;
-        Redis::hset($this->key(), 'starred', $this->starred);
-        return $this;
-    }
-
-    public static function getByUserId(int $userId, int &$count): array
-    {
-        $query = [
-            'FT.SEARCH',
-            'idx:notes',
-            '(@user_id:[$userId $userId])',
-            'PARAMS', 2, 'userId', $userId,
-            'RETURN', 7, '$.title', '$.content', '$.created_at', '$.updated_at', '$.pinned', '$.starred', '$.user_id',
-            'DIALECT', 2,
-        ];
-
-        $response = Redis::executeRaw($query);
-        $count = (integer) array_shift($response);
-
-        $notes = [];
-
-        while (count($response) > 0) {
-            $key = array_shift($response);
-            list(,,$noteId) = explode(':', $key);
-            $notes[$noteId] = new self($noteId, false);
-            $fields = array_shift($response);
-
-            while (count($fields) > 0) {
-                $notes[$noteId]->{str_replace('$.', '', array_shift($fields))} = array_shift($fields);
+        static::creating(function ($note) {
+            if (empty($note->uuid)) {
+                $note->uuid = (string) Str::uuid();
             }
-        }
-
-        return $notes;
+        });
     }
 
-    public static function searchWithEmbedding($userId, $embeddings)
+    public function user()
     {
-        $query = [
-            'FT.SEARCH',
-            'idx:notes',
-            '(@user_id:[$userId $userId])=>[KNN $topK @vector $query]',
-            'SORTBY', '__vector_score', "ASC",
-            'PARAMS', 6, 'userId', $userId, 'query', $embeddings, 'topK', 10,
-            'RETURN', 4, '$.title', '$.content', '$.created_at', '__vector_score',
-            'DIALECT', 2,
-        ];
-
-        $response = Redis::executeRaw($query);
-        $count = array_shift($response);
-
-        $notes = [];
-
-        while (count($response) > 0) {
-            $key = array_shift($response);
-            list(,,$noteId) = explode(':', $key);
-            $notes[$noteId] = new self($noteId, false);
-            $fields = array_shift($response);
-
-            while (count($fields) > 0) {
-                $fKey = array_shift($fields);
-                $fValue = array_shift($fields);
-                $notes[$noteId]->{str_replace('$.', '', $fKey)} = $fValue;
-            }
-        }
-
-        return $notes;
+        return $this->belongsTo(User::class);
     }
 
-    public function __toString()
+    public function getMarkdownFilename(): string
     {
-        $createdAt = new \DateTime;
-        $createdAt->setTimestamp($this->created_at);
-        return "### START OF NOTE " . $this->id . " ###\n[Title: " . $this->title . ", Date: " . $createdAt->format('Y/m/d H:i:s') . "]\n[Content: " . $this->content . "]\n### END OF NOTE " . $this->id . " ###";
+        return "{$this->uuid}.md";
     }
 
-    private function key(): string
+    // Define a scope for the full-text search
+    public function scopeSearch($query, $searchTerm)
     {
-        $id = $this->id;
-        $user_id = $this->user_id;
-        return "note:$user_id:$id";
+        return $query->whereRaw("MATCH(title, content) AGAINST (? IN NATURAL LANGUAGE MODE)", [$searchTerm]);
     }
 }
