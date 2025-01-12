@@ -50,7 +50,7 @@ class Note extends Model
 
         static::creating(function ($note) {
             if (empty($note->uuid)) {
-                $note->uuid = (string) Str::uuid();
+                $note->uuid = str_replace('-', '', ((string) Str::uuid()));
             }
         });
     }
@@ -62,7 +62,7 @@ class Note extends Model
 
     public function getMarkdownFilename(): string
     {
-        return "{$this->uuid}.md";
+        return "{$this->user_id}.{$this->uuid}.md";
     }
 
     // Define a scope for the full-text search

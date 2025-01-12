@@ -6,12 +6,16 @@ use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\ResourceValidator;
 use App\LLM\Assistant;
 use App\Models\Note;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\RecordsNotFoundException;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 final class NoteResource extends BasicResource
 {
+    CONST FILE_PATH = __DIR__ . '/../../../documents/notes/';
+
     public function __construct(
         private readonly Assistant $assistant,
         OutputBuilder $outputBuilder,
@@ -94,12 +98,13 @@ final class NoteResource extends BasicResource
 
             $note->save();
 
+            $this->pushChangesToFile($note, auth()->user());
+
             $outputBuilder
                 ->setCode(Response::HTTP_CREATED)
                 ->setStatus('created')
                 ->setData($note);
         } catch (\Throwable $e) {
-            dd($e->getMessage());
             $outputBuilder
                 ->setStatus('operation.failed')
                 ->setCode(Response::HTTP_BAD_REQUEST);
@@ -139,6 +144,8 @@ final class NoteResource extends BasicResource
             $note->title = $request->get('title');
             $note->content = $request->get('content');
             $note->save();
+
+            $this->pushChangesToFile($note, auth()->user());
 
             $outputBuilder->setData($note);
         } catch (\Throwable $e) {
@@ -282,5 +289,41 @@ final class NoteResource extends BasicResource
         }
 
         return $this;
+    }
+
+    private function pushChangesToFile(Note $note, User $user): void
+    {
+        $format = <<<'TEXT'
+        **Author:** 
+        
+        %s
+
+        **Date:** 
+        
+        %s
+        
+        **Title:** 
+        
+        %s
+
+        **Content:**
+        
+        %s
+        TEXT;
+
+        $createdAt = new Carbon($note->created_at);
+
+        file_put_contents(
+            self::FILE_PATH . $note->getMarkdownFilename(),
+            sprintf(
+                $format, 
+                $user->name, 
+                $createdAt->format('l jS \\of F Y h:i:s A'),
+                $note->title,
+                $note->content,
+            ),
+        );
+
+        $this->assistant->feedDocuments(self::FILE_PATH);
     }
 }
