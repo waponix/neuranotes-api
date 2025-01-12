@@ -33,7 +33,12 @@ final class NoteResource extends BasicResource
         $userId = auth()->user()->id;
 
         try {
-            $notes = Note::where('user_id', $userId)->get();
+            $search = $request->query->get('search');
+            if ($search !== null) {
+                $notes = Note::search($search)->get();
+            } else {
+                $notes = Note::where('user_id', $userId)->get();
+            }
         } catch (RecordsNotFoundException $e) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)

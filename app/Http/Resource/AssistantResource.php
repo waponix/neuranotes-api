@@ -138,9 +138,9 @@ final class AssistantResource extends BasicResource
             }
         }
 
-        $systemPrompt = file_get_contents(__DIR__ . '/../../LLM/_partner_role_v2.txt');
         $answer = $this->assistant->chat()->generateChat([
-            Message::system($systemPrompt),
+            Message::system($this->getSystemPromptForDan()),
+            ...$this->getTrainingForDan(auth()->user()),
             ...$convo,
             Message::user($query),
         ]);
