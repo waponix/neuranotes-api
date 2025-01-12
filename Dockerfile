@@ -21,3 +21,7 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
 # Set working directory
 WORKDIR /var/www/html
+
+# Create folder for the notes
+RUN mkdir 'documents'
+RUN mkdir 'documents/notes'

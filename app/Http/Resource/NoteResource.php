@@ -27,10 +27,9 @@ final class NoteResource extends BasicResource
     )
     {
         $userId = auth()->user()->id;
-        $count = 0;
 
         try {
-            $notes = Note::getByUserId($userId, $count);
+            $notes = Note::where('user_id', $userId)->get();
         } catch (RecordsNotFoundException $e) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -38,33 +37,33 @@ final class NoteResource extends BasicResource
             return $this;
         }
 
-        $notes = array_map(fn ($note) => $note->serialize(), $notes);
+        $numberedNotes = [];
+        foreach ($notes as $note) {
+            $numberedNotes[$note->id] = $note;
+        }
 
         $outputBuilder
-            ->addMeta('count', $count)
-            ->setData($notes);
+            ->setData($numberedNotes);
 
         return $this;
     }
-
+    
     protected function getRequest(
         Request $request,
         OutputBuilder $outputBuilder,
     ): static
     {
         $id = $request->get('noteId');
-        $userId = auth()->user()->id;
 
-        try {
-            $note = new Note("$userId:$id");
-        } catch (RecordsNotFoundException $e) {
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('record.not.found');
             return $this;
         }
 
-        $outputBuilder->setData($note->serialize());
+        $outputBuilder->setData($note);
 
         return $this;
     }
@@ -86,27 +85,21 @@ final class NoteResource extends BasicResource
             return $this;
         }
 
-        $note = new Note();
-        $note->title = $title = trim($request->get('title'));
-        $note->content = $content = trim($request->get('content'));
-        
-        // TODO: The way the created date it set here is dangerous,
-        // since it might not exactly match the actual date after save
-        $creationDate = new \DateTimeImmutable;
-        $content = "[Title: $title, Author: " . auth()->user()->name . ", Date: " . $creationDate->format('Y-m-d H:i:s') . "]\n[Content: $content]";
-        $embeddings = $this->assistant->embed($content)['embeddings'];
-        $note->embeddings = $embeddings;
-        
-        $note->user_id = auth()->user()->id;
-
         try {
+            $note = new Note;
+
+            $note->title = $request->get('title');
+            $note->content = $request->get('content');
+            $note->user_id = auth()->user()->id;
+
             $note->save();
 
             $outputBuilder
                 ->setCode(Response::HTTP_CREATED)
                 ->setStatus('created')
-                ->setData($note->serialize());
+                ->setData($note);
         } catch (\Throwable $e) {
+            dd($e->getMessage());
             $outputBuilder
                 ->setStatus('operation.failed')
                 ->setCode(Response::HTTP_BAD_REQUEST);
@@ -132,32 +125,22 @@ final class NoteResource extends BasicResource
             return $this;
         }
 
-        $userId = auth()->user()->id;
-        $noteId = $request->get('noteId');
+        $id = $request->get('noteId');
 
-        try {
-            $note = new Note("$userId:$noteId");
-        } catch (RecordsNotFoundException $e) {
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
                 ->setStatus('record.not.found');
             return $this;
         }
 
-        $note->title = $title = trim($request->get('title'));
-        $note->content = $content = trim($request->get('content'));
-
-        $creationDate = new \DateTimeImmutable;
-        $creationDate->setTimestamp($note->created_at);
-        $content = "[Title: $title, Author: " . auth()->user()->name . ", Date: " . $creationDate->format('Y-m-d H:i:s') . "]\n[Content: $content]";
-        $embeddings = $this->assistant->embed($content)['embeddings'];
-
-        $note->embeddings = $embeddings;
-
         try {
+            $note->title = $request->get('title');
+            $note->content = $request->get('content');
             $note->save();
 
-            $outputBuilder->setData($note->serialize());
+            $outputBuilder->setData($note);
         } catch (\Throwable $e) {
             $outputBuilder
                 ->setStatus('operation.failed')
@@ -172,12 +155,13 @@ final class NoteResource extends BasicResource
         OutputBuilder $outputBuilder,
     ): static
     {
-        $userId = auth()->user()->id;
-        $noteId = $request->get('noteId');
+        $id = $request->get('noteId');
 
-        try {
-            $note = new Note("$userId:$noteId");
-        } catch (RecordsNotFoundException $e) {
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
+            $outputBuilder
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setStatus('record.not.found');
             return $this;
         }
 
@@ -197,12 +181,18 @@ final class NoteResource extends BasicResource
         OutputBuilder $outputBuilder,
     ): static
     {
-        $noteId = $request->get('noteId');
-        $userId = auth()->user()->id;
+        $id = $request->get('noteId');
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
+            $outputBuilder
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setStatus('record.not.found');
+            return $this;
+        }
 
         try {
-            $note = new Note("$userId:$noteId");
-            $note->pin();
+            $note->pinned = true;
+            $note->save();
         } catch (\Throwable $e) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -218,12 +208,18 @@ final class NoteResource extends BasicResource
         OutputBuilder $outputBuilder,
     ): static
     {
-        $noteId = $request->get('noteId');
-        $userId = auth()->user()->id;
+        $id = $request->get('noteId');
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
+            $outputBuilder
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setStatus('record.not.found');
+            return $this;
+        }
 
         try {
-            $note = new Note("$userId:$noteId");
-            $note->unpin();
+            $note->pinned = false;
+            $note->save();
         } catch (\Throwable $e) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -239,12 +235,18 @@ final class NoteResource extends BasicResource
         OutputBuilder $outputBuilder,
     ): static
     {
-        $noteId = $request->get('noteId');
-        $userId = auth()->user()->id;
+        $id = $request->get('noteId');
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
+            $outputBuilder
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setStatus('record.not.found');
+            return $this;
+        }
 
         try {
-            $note = new Note("$userId:$noteId");
-            $note->star();
+            $note->starred = true;
+            $note->save();
         } catch (\Throwable $e) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -260,12 +262,18 @@ final class NoteResource extends BasicResource
         OutputBuilder $outputBuilder,
     ): static
     {
-        $noteId = $request->get('noteId');
-        $userId = auth()->user()->id;
+        $id = $request->get('noteId');
+        $note = auth()->user()->notes()->find($id);
+        if ($note === null) {
+            $outputBuilder
+                ->setCode(Response::HTTP_BAD_REQUEST)
+                ->setStatus('record.not.found');
+            return $this;
+        }
 
         try {
-            $note = new Note("$userId:$noteId");
-            $note->unstar();
+            $note->starred = false;
+            $note->save();
         } catch (\Throwable $e) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
