@@ -7,6 +7,7 @@
 - **Ollama** - v0.4.7
 
 ### Setting it up:
+I. **Laravel**
 1. Run the containers
 ```linux
 $ docker compose up --build
@@ -20,7 +21,19 @@ $ docker exec -it api_app composer install
 $ docker exec -it api_app php artisan key:generate
 $ docker exec -it api_app php artisan migrate
 ```
-4. Install qwen2.5 in ollama for the LLM
+
+II. **Redis**
+
+1. Add the following lines inside the `redis/redis.conf` file from the project's root. And replace the `<username>` and `<password>` with your own values.
+```config
+user <username> on ><password> ~* +@all
+requirepass <password>
+```
+
+III. **Ollama**
+
+
+1. Install qwen2.5 in ollama for the LLM
 ```linux
 $ docker exec -it ollama ollama pull qwen2.5
 ```
