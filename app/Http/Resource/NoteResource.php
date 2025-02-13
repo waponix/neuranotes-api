@@ -30,7 +30,7 @@ final class NoteResource extends BasicResource
         OutputBuilder $outputBuilder,
     )
     {
-        $userId = auth()->user()->id;
+        $userId = $this->getLoggedInUser()->id;
 
         try {
             $search = $request->query->get('search');
@@ -64,7 +64,7 @@ final class NoteResource extends BasicResource
     {
         $id = $request->get('noteId');
 
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -99,11 +99,11 @@ final class NoteResource extends BasicResource
 
             $note->title = $request->get('title');
             $note->content = $request->get('content');
-            $note->user_id = auth()->user()->id;
+            $note->user_id = $this->getLoggedInUser()->id;
 
             $note->save();
 
-            $this->pushChangesToFile($note, auth()->user());
+            $this->pushChangesToFile($note, $this->getLoggedInUser());
 
             $outputBuilder
                 ->setCode(Response::HTTP_CREATED)
@@ -137,7 +137,7 @@ final class NoteResource extends BasicResource
 
         $id = $request->get('noteId');
 
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -150,7 +150,7 @@ final class NoteResource extends BasicResource
             $note->content = $request->get('content');
             $note->save();
 
-            $this->pushChangesToFile($note, auth()->user());
+            $this->pushChangesToFile($note, $this->getLoggedInUser());
 
             $outputBuilder->setData($note);
         } catch (\Throwable $e) {
@@ -169,7 +169,7 @@ final class NoteResource extends BasicResource
     {
         $id = $request->get('noteId');
 
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -194,7 +194,7 @@ final class NoteResource extends BasicResource
     ): static
     {
         $id = $request->get('noteId');
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -221,7 +221,7 @@ final class NoteResource extends BasicResource
     ): static
     {
         $id = $request->get('noteId');
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -248,7 +248,7 @@ final class NoteResource extends BasicResource
     ): static
     {
         $id = $request->get('noteId');
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)
@@ -275,7 +275,7 @@ final class NoteResource extends BasicResource
     ): static
     {
         $id = $request->get('noteId');
-        $note = auth()->user()->notes()->find($id);
+        $note = $this->getLoggedInUser()->notes()->find($id);
         if ($note === null) {
             $outputBuilder
                 ->setCode(Response::HTTP_BAD_REQUEST)

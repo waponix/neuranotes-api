@@ -4,6 +4,7 @@ namespace App\Http\Resource;
 use App\Http\Api\BasicResource;
 use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\ResourceValidator;
+use App\Http\Api\LLphantStreamCallback;
 use App\LLM\Assistant;
 use App\LLM\AssistantTrait;
 use Firebase\JWT\JWT;
@@ -34,13 +35,78 @@ final class AssistantResource extends BasicResource
     ): static
     {
         // TODO: implement input validation
-        $role = (integer) $request->get('role');
+        $role = $request->get('role');
 
         switch ($role) {
             case 2: $this->playRole2($request, $outputBuilder); break;
-            case 1: 
-            default: $this->playRole1($request, $outputBuilder);
+            case 1: $this->playRole1($request, $outputBuilder); break; 
+            default: $this->playRoleDefault($request, $outputBuilder);
         }
+
+        return $this;
+    }
+
+    private function playRoleDefault(
+        Request $request, 
+        OutputBuilder $outputBuilder
+    ) {
+        $token = $request->get('token');
+        $query = trim($request->get('query'));
+
+        $convo = [];
+        if ($token !== null) {
+            try {
+                $token = JWT::decode($token, new Key(self::SECRET . ':' . auth()->user()->id, self::ALGO));
+                $convo = json_decode(json_encode($token->convo), true);
+
+                $convo = array_map(function ($message) {
+                    return match ($message['role']) {
+                        'user'      => Message::user($message['content']),
+                        'assistant' => Message::assistant($message['content']),
+                    };
+                }, $convo);
+            } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+                $outputBuilder
+                    ->setStatus('invalid.arguments')
+                    ->setCode(Response::HTTP_BAD_REQUEST)
+                    ->setError([
+                        'token' => 'invalid token'
+                    ]);
+
+                return $this;
+            }
+        }
+
+        $body = $this->assistant->chat()->generateChatStream([
+            ...$convo,
+            Message::user($query),
+        ], 10);
+
+        $answer = '';
+        // Process the stream in chunks
+        while (!$body->eof()) {
+            $answer .= $body->read(1024); // Read 1KB at a time
+        }
+
+        $convo[] = Message::user($query);
+        $convo[] = Message::assistant($answer);
+
+        $token = JWT::encode(['convo' => $convo], self::SECRET . ':' . auth()->user()->id, self::ALGO);
+
+        // $outputBuilder
+        //     ->stream(true)
+        //     ->streamCallback(new LLphantStreamCallback(
+        //         $body,
+        //         $convo,
+        //         self::SECRET . ':' . auth()->user()->id,
+        //         self::ALGO,
+        //     ));
+
+        $outputBuilder
+            ->setData([
+                'answer' => $answer,
+                'token' => $token,
+            ]);
 
         return $this;
     }

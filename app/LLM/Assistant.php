@@ -11,24 +11,23 @@ use LLPhant\Embeddings\EmbeddingFormatter\EmbeddingFormatter;
 use LLPhant\Embeddings\EmbeddingGenerator\Ollama\OllamaEmbeddingGenerator;
 use LLPhant\Embeddings\VectorStores\Redis\RedisVectorStore;
 use LLPhant\OllamaConfig;
-use LLPhant\Query\SemanticSearch\LLMReranker;
 use LLPhant\Query\SemanticSearch\QuestionAnswering;
-use LLPhant\Query\SemanticSearch\SiblingsDocumentTransformer;
 use Predis\Client;
 
-class Assistant extends AssistantApi
+class Assistant
 {
-    const LLM_MODEL = 'qwen2.5';
+    const QWEN = 'qwen2.5';
+    const LLAMA = 'llama3.2';
     const EMBEDDING_MODEL = 'nomic-embed-text';
 
     private OllamaConfig $ollamaConfig;
 
     private RedisVectorStore $vectorStore;
 
-    public function __construct(Client $client)
+    public function __construct()
     {
         $this->ollamaConfig = new OllamaConfig;
-        $this->ollamaConfig->model = self::LLM_MODEL;
+        $this->ollamaConfig->model = self::QWEN;
         $this->ollamaConfig->url = 'http://ollama:11434/api/';
 
         $this->vectorStore = new RedisVectorStore(
@@ -81,40 +80,5 @@ class Assistant extends AssistantApi
     public function chat(): OllamaChat
     {
         return new OllamaChat($this->ollamaConfig);;
-    }
-
-    public function generate(string $input): mixed
-    {
-        $payload = [
-            'model' => self::LLM_MODEL,
-            'prompt' => $input,
-            'stream' => false,
-        ];
-
-        $response = $this->sendRequest('generate', [
-            'payload' => $payload,
-            'method' => Request::METHOD_POST,
-        ]);
-
-        return $response;
-    }
-
-    public function embed(string $input): mixed
-    {
-        $payload = [
-            'model' => self::EMBEDDING_MODEL,
-            'prompt' => $input,
-        ];
-
-        $response = $this->sendRequest('embeddings', [
-            'payload'   => $payload,
-            'method'    => Request::METHOD_POST,
-        ]);
-
-        if (isset($response['embedding'])) {
-            return ['embeddings' => $response['embedding']];
-        }
-
-        return ['embeddings' => []];
     }
 }

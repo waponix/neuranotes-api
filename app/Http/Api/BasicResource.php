@@ -4,7 +4,8 @@ namespace App\Http\Api;
 use App\Http\Api\Interface\OutputBuilder;
 use App\Http\Api\Interface\Resource;
 use App\Http\Api\Interface\ResourceValidator;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use App\Models\User;
+use Symfony\Component\HttpFoundation\Response;
 
 abstract class BasicResource implements Resource
 {
@@ -23,7 +24,7 @@ abstract class BasicResource implements Resource
         }
     }
 
-    public function __call(string $name, array $args): JsonResponse {
+    public function __call(string $name, array $args): Response {
         if (stripos($name, self::HANDLER_PREFIX) !== false) {
                 $name = lcfirst(str_replace(self::HANDLER_PREFIX, '', $name));
 
@@ -57,5 +58,10 @@ abstract class BasicResource implements Resource
     protected function validator(): ?ResourceValidator
     {
         return $this->validators[$this->validatorId] ?? null;
+    }
+
+    protected function getLoggedInUser(): User
+    {
+        return auth()->user();
     }
 }

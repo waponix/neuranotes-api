@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Api\Interface;
 
-use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 interface OutputBuilder
 {
@@ -17,5 +17,9 @@ interface OutputBuilder
 
     public function addHeader(string $name, string $value): OutputBuilder;
 
-    public function build(): JsonResponse;
+    public function stream(bool $flag): OutputBuilder;
+
+    public function streamCallback(StreamCallback $callback): OutputBuilder;
+
+    public function build(): Response;
 }

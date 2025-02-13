@@ -2,8 +2,9 @@
 namespace App\Http\Api;
 
 use App\Http\Api\Interface\OutputBuilder;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use App\Http\Api\Interface\StreamCallback;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BasicOutputBuilder implements OutputBuilder
 {
@@ -13,6 +14,8 @@ class BasicOutputBuilder implements OutputBuilder
     private int $code = Response::HTTP_OK;
     private string $status = 'ok';
     private array $headers = [];
+    private bool $isStream = false;
+    private $streamCallback;
 
     public function setData(mixed $data): static
     {
@@ -50,7 +53,19 @@ class BasicOutputBuilder implements OutputBuilder
         return $this;
     }
 
-    public function build(): JsonResponse
+    public function stream(bool $flag): static
+    {
+        $this->isStream = $flag;
+        return $this;
+    }
+
+    public function streamCallback(StreamCallback $callback): static
+    {
+        $this->streamCallback = $callback;
+        return $this;
+    }
+
+    public function build(): Response
     {
         $content = [
             'status' => $this->status,
@@ -58,6 +73,11 @@ class BasicOutputBuilder implements OutputBuilder
             'error' => $this->error,
             'data' => $this->data,
         ];
+
+        if ($this->isStream === true) {
+            $content['data'] = $this->streamCallback->callback($this);
+            return response()->streamJson($content);
+        }
 
         return response()->json($content, $this->code, $this->headers);
     }

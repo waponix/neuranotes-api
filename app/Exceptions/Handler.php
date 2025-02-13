@@ -34,7 +34,7 @@ class Handler extends ExceptionHandler
         if ($request->is('api/*')) {
             return match(true) {
                 $e instanceof AuthenticationException => response()->json(['error' => 'invalid token'], 401),
-                true => response()->json(['error' => 'system error'], 500),
+                true => response()->json(['error' => 'system error', 'file' => $e->getFile(), 'line' => $e->getLine(), 'message' => $e->getMessage()], 500),
             };
         }
 

@@ -9,7 +9,7 @@ final class CreateNoteValidator extends BasicResourceValidator
     {
         return [
             'title' => 'required|string',
-            'content' => 'required|string',
+            'content' => 'string',
         ];
     }
 }

@@ -3,7 +3,6 @@
 use App\Http\Controllers\AssistantController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\NoteController;
 
 /*
@@ -56,14 +55,6 @@ Route::controller(AssistantController::class)->group(function () {
     });
 
 });
-
-// Route::controller(ChatController::class)->group(function () {
-       
-//     Route::middleware('auth:api')->group(function () {
-//         Route::post('/chat', 'chat');
-//     });
-
-// });
 
 Route::fallback(function () {
     return response()->json([
